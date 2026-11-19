@@ -6,6 +6,7 @@
 <title>Ma Dictée Parlante</title>
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#c4261f">
+<meta name="app-version" content="1.3">
 <meta name="mobile-web-app-capable" content="yes">
 <link rel="icon" href="icons/icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -64,6 +65,10 @@ box-shadow:0 5px 0 var(--keyd),0 7px 8px rgba(0,0,0,.35);transition:transform .0
 .pwr .sep{width:2px;background:rgba(0,0,0,.2);border-radius:2px}
 .k.round.on.lit{box-shadow:0 5px 0 #0d4d1c,0 0 22px 4px #6dff86}
 .k:focus-visible{outline:3px solid #fff;outline-offset:2px}
+.upd{display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap;margin:12px 8px 0;font-size:14px}
+.upd button{background:transparent;color:var(--ink);border:2px solid currentColor;border-radius:999px;padding:8px 16px;min-height:44px;font-weight:600;opacity:.8}
+.upd button:disabled{opacity:.4}
+#updmsg{opacity:.75}
 .note{max-width:980px;font-size:14px;opacity:.75;text-align:center;margin:18px 8px 0}
 @media(max-width:600px){.cmds{grid-template-columns:repeat(4,minmax(0,1fr))}.grille{display:none}.toy{border-radius:24px}.keys{gap:4px}.k{border-radius:9px}}
 @media(prefers-reduced-motion:reduce){.pic.show{animation:none}.cell.cur{animation:none}.k{transition:none}}
@@ -358,6 +363,26 @@ document.addEventListener("keydown",e=>{if(e.repeat||e.metaKey||e.ctrlKey)return
  const el=document.querySelector(`[data-l="${k}"],[data-c="${k}"]`);if(el){e.preventDefault();press(el)}});
 }
 </script>
-<script>if("serviceWorker" in navigator)window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}))</script>
+<p class="upd"><button id="upd" type="button">↻ Mettre à jour le jeu</button><span id="updmsg"></span></p>
+<script>
+{
+const VERSION=document.querySelector('meta[name="app-version"]').content;
+const btn=document.getElementById("upd"),msg=document.getElementById("updmsg");
+msg.textContent="Version "+VERSION;
+if("serviceWorker" in navigator)window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));
+btn.addEventListener("click",async()=>{
+ btn.disabled=true;msg.textContent="Recherche d'une mise à jour…";
+ let html;
+ try{const r=await fetch("./?v="+Date.now(),{cache:"no-store"});if(!r.ok)throw 0;html=await r.text()}
+ catch(e){msg.textContent="Pas de connexion internet. Réessaie plus tard.";btn.disabled=false;return}
+ const m=html.match(/name="app-version" content="([^"]+)"/),latest=m?m[1]:VERSION;
+ if(latest===VERSION){msg.textContent="Le jeu est déjà à jour (version "+VERSION+").";btn.disabled=false;return}
+ msg.textContent="Installation de la version "+latest+"…";
+ try{if("caches" in window)for(const k of await caches.keys())await caches.delete(k)}catch(e){}
+ try{const reg=await navigator.serviceWorker?.getRegistration();if(reg)await reg.update()}catch(e){}
+ setTimeout(()=>location.reload(),600);
+});
+}
+</script>
 </body>
 </html>

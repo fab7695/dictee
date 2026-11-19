@@ -122,14 +122,53 @@ if("speechSynthesis" in window){pickVoice();speechSynthesis.onvoiceschanged=pick
 function beep(f,d=.05,vol=.05,t0=0){if(!ac)return;const o=ac.createOscillator(),g=ac.createGain();o.type="square";o.frequency.value=f;
  const t=ac.currentTime+t0;g.gain.setValueAtTime(vol,t);g.gain.exponentialRampToValueAtTime(.0001,t+d);o.connect(g).connect(ac.destination);o.start(t);o.stop(t+d+.02)}
 function jingle(){[523,659,784,1047].forEach((f,i)=>beep(f,.12,.05,i*.11))}
-function say(text){return new Promise(res=>{
- if(!("speechSynthesis" in window)){setTimeout(res,400+text.length*55);return}
- const u=new SpeechSynthesisUtterance(text);u.lang="fr-FR";if(voice)u.voice=voice;u.rate=.82;u.pitch=.5;
- let done=false;const fin=()=>{if(!done){done=true;res()}};u.onend=fin;u.onerror=fin;setTimeout(fin,1800+text.length*110);
- speechSynthesis.speak(u)})}
+/* Voix robuste pour Chrome Android : on ne relance jamais la voix juste après l'avoir coupée,
+   on garde les phrases en mémoire (sinon le navigateur les perd) et on relance si rien ne démarre. */
+const SS=("speechSynthesis" in window)?speechSynthesis:null;
 const wait=ms=>new Promise(r=>setTimeout(r,ms));
+const keep=new Set();let lastCut=0;
 let seq=0;
-function hush(){seq++;if("speechSynthesis" in window)speechSynthesis.cancel();return seq}
+async function say(text){
+ const my=seq;
+ if(!SS){await wait(400+text.length*55);return}
+ const gap=Date.now()-lastCut;if(gap<300)await wait(300-gap);
+ if(my!==seq)return;
+ if(SS.paused)SS.resume();
+ const once=()=>new Promise(res=>{
+  const u=new SpeechSynthesisUtterance(text);u.lang="fr-FR";if(voice)u.voice=voice;u.rate=.82;u.pitch=.5;
+  keep.add(u);let started=false,done=false;
+  const fin=ok=>{if(!done){done=true;keep.delete(u);res(ok)}};
+  u.onstart=()=>{started=true};u.onend=()=>fin(true);u.onerror=()=>fin(started);
+  SS.speak(u);
+  setTimeout(()=>{if(!started&&!done)fin(false)},1500);
+  setTimeout(()=>fin(true),2500+text.length*120);
+ });
+ if(!(await once())&&my===seq){SS.cancel();await wait(300);if(my===seq){if(voice===null)pickVoice();await once()}}
+}
+function hush(){seq++;stopListen();if(SS&&(SS.speaking||SS.pending)){SS.cancel();lastCut=Date.now()}return seq}
+document.addEventListener("visibilitychange",()=>{if(SS&&document.visibilityState==="visible"&&SS.paused)SS.resume()});
+/* ---- micro (jeu DIS-LE) ---- */
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+let rec=null,micOff=!SR;
+function stopListen(){if(rec){const r=rec;rec=null;try{r.abort()}catch(e){}}}
+function listen(){return new Promise(res=>{
+ if(micOff)return res(null);
+ const r=new SR();rec=r;r.lang="fr-FR";r.interimResults=false;r.maxAlternatives=5;r.continuous=false;
+ let out=null;
+ r.onresult=e=>{out=[...e.results[0]].map(a=>a.transcript)};
+ r.onerror=e=>{if(e.error==="not-allowed"||e.error==="service-not-allowed"||e.error==="audio-capture")micOff=true};
+ r.onend=()=>{if(rec===r)rec=null;res(out)};
+ try{r.start()}catch(e){rec=null;return res(null)}
+ setTimeout(()=>{try{r.stop()}catch(e){}},6000);
+})}
+const lev=(a,b)=>{const d=Array.from({length:a.length+1},(_,i)=>[i]);for(let j=1;j<=b.length;j++)d[0][j]=j;
+ for(let i=1;i<=a.length;i++)for(let j=1;j<=b.length;j++)d[i][j]=Math.min(d[i-1][j]+1,d[i][j-1]+1,d[i-1][j-1]+(a[i-1]===b[j-1]?0:1));return d[a.length][b.length]};
+function heard(alts,w){
+ const norm=s=>s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z]+/g," ").trim();
+ const t=norm(w);
+ return alts.some(a=>{const n=norm(a);if(!n)return false;if(n.replace(/ /g,"")===t)return true;
+  return n.split(" ").some(x=>x===t||(t.length>=2&&lev(x,t)<=1))});
+}
 
 /* ---- affichage ---- */
 let lower=false;try{lower=localStorage.getItem("dp-case")==="min"}catch(e){}
@@ -151,7 +190,7 @@ async function power(){
  if(S.mode!=="off")return;
  onBtn.classList.add("lit");
  try{ac=ac||new (window.AudioContext||window.webkitAudioContext)();ac.resume()}catch(e){}
- if("speechSynthesis" in window){speechSynthesis.cancel();pickVoice()}
+ if(SS){SS.cancel();lastCut=Date.now();pickVoice()}
  const s=hush();vfd.classList.remove("off");jingle();show("BONJOUR");menu();
  await say("Bonjour. Choisis un jeu.");if(s===seq&&S.mode==="menu")show("");
 }
@@ -205,9 +244,26 @@ async function checkSpell(){
 /* DIS-LE */
 async function nextSay(){
  const s=hush();
- if(S.i>=S.words.length){show("FIN");menu("Partie finie — choisis un jeu");await say("C'est fini. Bravo !");return}
- const w=S.words[S.i];show(w);setInfo(`Mot ${S.i+1}/10 — lis le mot à voix haute`,"ENTRÉE = suivant");
- await say("Dis-le : "+w);
+ if(S.i>=S.words.length){
+  if(S.usedMic){const sc=S.score;show(`${sc} SUR 10`);menu("Partie finie — choisis un jeu");
+   await say(`Tu as ${sc} bonne${sc>1?"s":""} réponse${sc>1?"s":""} sur dix.`);if(s===seq&&sc>=8)await say("Bravo !");return}
+  show("FIN");menu("Partie finie — choisis un jeu");await say("C'est fini. Bravo !");return}
+ S.tries=0;const w=S.words[S.i];show(w);setInfo(`Mot ${S.i+1}/10 — lis le mot à voix haute`,micOff?"ENTRÉE = suivant":`Score ${S.score}`);
+ await say("Dis-le : "+w);if(s!==seq||micOff)return;
+ await wait(150);if(s===seq)hear(s);
+}
+async function hear(s){
+ const w=S.words[S.i];setInfo(`Mot ${S.i+1}/10 — micro ouvert : parle !`,`Score ${S.score}`);
+ const alts=await listen();if(s!==seq)return;
+ if(alts===null&&micOff){setInfo(`Mot ${S.i+1}/10 — lis le mot à voix haute`,"ENTRÉE = suivant");
+  await say("Je n'ai pas accès au micro. Lis le mot, puis touche entrée.");return}
+ S.usedMic=true;
+ if(alts&&heard(alts,w)){S.score++;show("CORRECT");beep(988,.08);beep(1319,.12,.05,.09);setInfo(`Mot ${S.i+1}/10`,`Score ${S.score}`);
+  await say(["Correct !","Bien dit !","Très bien !"][Math.random()*3|0]);if(s!==seq)return;S.i++;return nextSay()}
+ if(S.tries===0){S.tries=1;beep(196,.2,.05);
+  await say(alts?"Je n'ai pas bien compris. Essaie encore une fois : "+w:"Je n'ai rien entendu. Répète : "+w);
+  if(s!==seq)return;await wait(150);if(s===seq)hear(s);return}
+ await say("Bien essayé. Le mot était : "+w);if(s!==seq)return;S.i++;nextSay();
 }
 /* LETTRE : une lettre est montrée et dite, l'enfant appuie sur la bonne touche */
 const keyOf=l=>document.querySelector(`[data-l="${l}"]`);

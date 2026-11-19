@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Ma Dictée Parlante</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#c4261f">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=VT323&display=swap" rel="stylesheet">
+<style>
+/* VOICE: un jouet électronique de 1979, joyeux, solide, sans fioritures
+   IDEA: la page EST le boîtier rouge, posé sur une table
+   PICTURE: le jouet entier, afficheur fluorescent, grille de haut-parleur, clavier alphabétique
+   COLOUR and TYPE: rouge brique, jaune soleil, touches crème, afficheur cyan-vert ; Fredoka + VT323
+   LAYOUT: le jouet centré, plein écran sur tablette, clavier qui se resserre sur téléphone */
+:root{color-scheme:light dark;--bg:light-dark(#e9dcc3,#17110e);--ink:light-dark(#3a2a20,#e9dcc3);
+--red:#c4261f;--red2:#9e1a15;--yel:#f6c12c;--key:#f5ead0;--keyd:#cdbb93;--vfd:#62f5d2}
+:root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 Fredoka,system-ui,sans-serif;overflow-x:clip;overscroll-behavior:none;
+min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:max(2vw,10px)}
+.toy{width:min(980px,100%);background:linear-gradient(170deg,#dc3a2f,var(--red) 40%,var(--red2));border-radius:34px 34px 46px 46px;
+padding:clamp(14px,2.4vw,28px);box-shadow:0 2px 0 #ff6a5c inset,0 -6px 0 #7c1210 inset,0 24px 40px -12px rgba(0,0,0,.55);user-select:none;-webkit-user-select:none}
+.top{display:flex;align-items:center;gap:clamp(12px,2vw,24px);margin-bottom:clamp(10px,1.6vw,18px)}
+.grille{flex:0 0 clamp(70px,12vw,120px);aspect-ratio:1.6;border-radius:14px;background:#7d1411 radial-gradient(circle,#2b0605 38%,transparent 42%) 0 0/12px 12px;box-shadow:0 2px 3px rgba(0,0,0,.4) inset}
+.brand{font-weight:700;font-style:italic;color:var(--yel);font-size:clamp(24px,4vw,42px);line-height:1.05;text-shadow:0 3px 0 #7c1210}
+.brand small{display:block;font-size:.42em;font-style:normal;font-weight:500;color:#ffd9c9;text-shadow:none;letter-spacing:.02em}
+.screen{background:#1d1d1f;border-radius:16px;padding:clamp(10px,1.6vw,18px);box-shadow:0 0 0 5px #8a1612,0 4px 8px rgba(0,0,0,.6) inset}
+.vfd{display:grid;grid-template-columns:repeat(10,minmax(0,1fr));gap:clamp(3px,.6vw,7px);background:#06221d;border-radius:8px;padding:clamp(6px,1vw,12px)}
+.cell{font-family:VT323,monospace;font-size:clamp(34px,7.4vw,78px);line-height:1;text-align:center;color:var(--vfd);
+text-shadow:0 0 6px var(--vfd),0 0 18px rgba(98,245,210,.45);height:1.15em;border-bottom:2px solid rgba(98,245,210,.08)}
+.off .cell{color:transparent;text-shadow:none}
+.cell.cur{animation:blink 1s steps(1) infinite;border-bottom-color:var(--vfd)}
+@keyframes blink{50%{border-bottom-color:transparent}}
+.info{color:#f6c12c;font-size:clamp(14px,1.8vw,17px);min-height:1.6em;margin-top:8px;padding-inline:4px;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.keys{display:grid;grid-template-columns:repeat(9,minmax(0,1fr));gap:clamp(5px,1vw,10px);margin-top:clamp(14px,2vw,22px)}
+button{font:inherit;border:0;cursor:pointer;touch-action:manipulation}
+.k{background:var(--key);color:var(--red2);font-weight:600;font-size:clamp(18px,3vw,30px);min-height:clamp(46px,7.5vw,72px);border-radius:12px;
+box-shadow:0 5px 0 var(--keyd),0 7px 8px rgba(0,0,0,.35);transition:transform .05s,box-shadow .05s}
+.k:active,.k.down{transform:translateY(4px);box-shadow:0 1px 0 var(--keyd),0 2px 3px rgba(0,0,0,.35)}
+.k.acc{background:#ffe6b8}
+.k.ctl{background:#3b2b26;color:#f5ead0;font-size:clamp(14px,2vw,20px);box-shadow:0 5px 0 #1d1412,0 7px 8px rgba(0,0,0,.35)}
+.k.ctl:active,.k.ctl.down{box-shadow:0 1px 0 #1d1412}
+.span2{grid-column:span 2}.span3{grid-column:span 3}
+.k.hint{outline:4px solid var(--vfd);outline-offset:2px;box-shadow:0 0 18px var(--vfd),0 5px 0 var(--keyd)}
+.pic{display:none;margin-bottom:clamp(8px,1.4vw,14px);height:clamp(110px,20vw,190px);border-radius:10px;background:radial-gradient(circle at 50% 40%,#fff8e6,#f1dfb6);place-items:center;font-size:clamp(76px,14vw,140px);line-height:1;box-shadow:0 2px 6px rgba(0,0,0,.5) inset}
+.pic.show{display:grid;animation:pop .35s ease-out}
+@keyframes pop{from{transform:scale(.6);opacity:0}}
+.k.cmd.help{background:#8fd8ff;color:#0b3a55;box-shadow:0 5px 0 #3a8bb8,0 7px 8px rgba(0,0,0,.35)}
+.k.cmd.help.dim{opacity:.45}
+.cmds{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:clamp(6px,1vw,12px);margin-top:clamp(16px,2.4vw,26px)}
+.k.cmd{background:var(--yel);color:#5a1a0c;font-size:clamp(13px,1.8vw,18px);font-weight:700;line-height:1.1;box-shadow:0 5px 0 #b8860b,0 7px 8px rgba(0,0,0,.35)}
+.k.cmd:active,.k.cmd.down{box-shadow:0 1px 0 #b8860b}
+.pwr{margin-inline-start:auto;display:flex;gap:clamp(10px,2vw,22px)}
+.pwr div{display:flex;flex-direction:column;align-items:center;gap:6px;color:#ffd9c9;font-size:clamp(12px,1.5vw,14px);font-weight:600}
+.k.round{width:clamp(48px,7vw,66px);min-height:0;aspect-ratio:1;border-radius:50%;padding:0}
+.k.round.on{background:radial-gradient(circle at 35% 30%,#8ff59a,#22a83a 60%,#15702a);box-shadow:0 5px 0 #0d4d1c,0 7px 8px rgba(0,0,0,.4)}
+.k.round.off{background:radial-gradient(circle at 35% 30%,#ff8a80,#d8231b 60%,#8e100b);box-shadow:0 5px 0 #5e0a07,0 7px 8px rgba(0,0,0,.4)}
+.k.round:active,.k.round.down{transform:translateY(4px);box-shadow:0 1px 0 #000,0 2px 3px rgba(0,0,0,.4)}
+.k.round.case{background:radial-gradient(circle at 35% 30%,#fff0a8,#f6c12c 60%,#b8860b);color:#5a1a0c;font-weight:700;font-size:clamp(14px,2vw,18px);box-shadow:0 5px 0 #7a5a06,0 7px 8px rgba(0,0,0,.4)}
+.pwr .sep{width:2px;background:rgba(0,0,0,.2);border-radius:2px}
+.k.round.on.lit{box-shadow:0 5px 0 #0d4d1c,0 0 22px 4px #6dff86}
+.k:focus-visible{outline:3px solid #fff;outline-offset:2px}
+.note{max-width:980px;font-size:14px;opacity:.75;text-align:center;margin:18px 8px 0}
+@media(max-width:600px){.cmds{grid-template-columns:repeat(4,minmax(0,1fr))}.grille{display:none}.toy{border-radius:24px}.keys{gap:4px}.k{border-radius:9px}}
+@media(prefers-reduced-motion:reduce){.pic.show{animation:none}.cell.cur{animation:none}.k{transition:none}}
+</style>
+</head>
+<body>
+<div class="toy">
+  <div class="top">
+    <div class="grille" aria-hidden="true"></div>
+    <div class="brand">Ma Dictée Parlante<small>Spécial CP · mots de 5 lettres maximum</small></div>
+    <div class="pwr">
+      <div><button class="k round case" data-c="case" aria-label="Majuscules ou minuscules">ABC</button><span id="caseLab">MAJUSCULES</span></div>
+      <div><button class="k round on" data-c="on" aria-label="Marche"></button><span>MARCHE</span></div>
+      <div><button class="k round off" data-c="off" aria-label="Arrêt"></button><span>ARRÊT</span></div>
+    </div>
+  </div>
+  <div class="screen">
+    <div id="pic" class="pic" aria-live="polite"></div>
+    <div id="vfd" class="vfd off" aria-live="polite"></div>
+    <div class="info"><span id="info">Appuie sur MARCHE</span><span id="stat"></span></div>
+  </div>
+  <div id="keys" class="keys"></div>
+  <div class="cmds">
+    <button class="k cmd" data-c="letters">LETTRE</button>
+    <button class="k cmd" data-c="syll">SYLLABE</button>
+    <button class="k cmd" data-c="sayit">DIS-LE</button>
+    <button class="k cmd" data-c="img">IMAGE</button>
+    <button class="k cmd" data-c="mystery">MOT<br>MYSTÈRE</button>
+    <button class="k cmd" data-c="spell">ÉPELLE</button>
+    <button class="k cmd" data-c="repeat">RÉPÈTE</button>
+    <button class="k cmd help" data-c="help">AIDE</button>
+  </div>
+</div>
+<p class="note">La voix est celle de la synthèse vocale de la tablette : pense à monter le son.</p>
+
+<script>
+{
+/* Vocabulaire CP : 5 lettres maximum. COURTS = 2-3 lettres, LONGS = 4-5 lettres */
+const COURTS="ami lit nez rue sac mur bus riz sol bol pot feu jeu roi dos fil été".split(" ");
+const LONGS="chat loup lune papa maman pomme robe pain table livre fille rose jupe moto carte lapin poule vache midi joli école mardi lundi neige pluie rouge vert bleu jaune noir lait sucre dame tasse porte dent main pied ours lion poire".split(" ");
+const cpWords=()=>[...shuffle(COURTS).slice(0,4),...shuffle(LONGS).slice(0,6)];
+const NAMES={A:"a",B:"bé",C:"cé",D:"dé",E:"euh",F:"èf",G:"gé",H:"hache",I:"i",J:"ji",K:"ka",L:"elle",M:"emme",N:"ène",O:"o",P:"pé",Q:"cu",R:"erre",S:"esse",T:"té",U:"u",V:"vé",W:"double vé",X:"ixe",Y:"i grec",Z:"zède","É":"e accent aigu","È":"e accent grave","Ê":"e accent circonflexe","À":"a accent grave","Ç":"cé cédille"};
+const LETTERS="ABCDEFGHIJKLMNOPQRSTUVWXYZÉÈÊÀÇ".split("");
+const N=10, MAXMISS=8;
+const $=id=>document.getElementById(id);
+const vfd=$("vfd"), info=$("info"), stat=$("stat");
+vfd.innerHTML=Array.from({length:N},()=>'<div class="cell"></div>').join("");
+const cells=[...vfd.children];
+$("keys").innerHTML=LETTERS.map(l=>`<button class="k${"ÉÈÊÀÇ".includes(l)?" acc":""}" data-l="${l}">${l}</button>`).join("")
+ +'<button class="k ctl span2" data-c="del">EFFACE</button><button class="k ctl span3" data-c="enter">ENTRÉE</button>';
+
+/* ---- son ---- */
+let ac=null, voice=null;
+const pickVoice=()=>{const vs=speechSynthesis.getVoices();voice=vs.find(v=>/^fr[-_]FR/i.test(v.lang))||vs.find(v=>/^fr/i.test(v.lang))||null};
+if("speechSynthesis" in window){pickVoice();speechSynthesis.onvoiceschanged=pickVoice}
+function beep(f,d=.05,vol=.05,t0=0){if(!ac)return;const o=ac.createOscillator(),g=ac.createGain();o.type="square";o.frequency.value=f;
+ const t=ac.currentTime+t0;g.gain.setValueAtTime(vol,t);g.gain.exponentialRampToValueAtTime(.0001,t+d);o.connect(g).connect(ac.destination);o.start(t);o.stop(t+d+.02)}
+function jingle(){[523,659,784,1047].forEach((f,i)=>beep(f,.12,.05,i*.11))}
+function say(text){return new Promise(res=>{
+ if(!("speechSynthesis" in window)){setTimeout(res,400+text.length*55);return}
+ const u=new SpeechSynthesisUtterance(text);u.lang="fr-FR";if(voice)u.voice=voice;u.rate=.82;u.pitch=.5;
+ let done=false;const fin=()=>{if(!done){done=true;res()}};u.onend=fin;u.onerror=fin;setTimeout(fin,1800+text.length*110);
+ speechSynthesis.speak(u)})}
+const wait=ms=>new Promise(r=>setTimeout(r,ms));
+let seq=0;
+function hush(){seq++;if("speechSynthesis" in window)speechSynthesis.cancel();return seq}
+
+/* ---- affichage ---- */
+let lower=false;try{lower=localStorage.getItem("dp-case")==="min"}catch(e){}
+function show(t,cursor=false){t=lower?(t||"").toLowerCase():(t||"").toUpperCase();cells.forEach((c,i)=>{c.textContent=t[i]&&t[i]!==" "?t[i]:"";c.classList.toggle("cur",cursor&&i===t.length&&i<N)})}
+const setInfo=(a,b="")=>{info.textContent=a;stat.textContent=b};
+const shuffle=a=>{a=[...a];for(let i=a.length-1;i>0;i--){const j=Math.random()*(i+1)|0;[a[i],a[j]]=[a[j],a[i]]}return a};
+const base=c=>c.normalize("NFD").replace(/[̀-ͯ]/g,"");
+
+/* ---- état ---- */
+let S={mode:"off"};
+const menu=(msg="Choisis un jeu")=>{S={mode:"menu"};setInfo(msg);setPic("")};
+
+function applyCase(){document.querySelectorAll("[data-l]").forEach(b=>b.textContent=lower?b.dataset.l.toLowerCase():b.dataset.l);
+ const cb=document.querySelector('[data-c="case"]');cb.textContent=lower?"abc":"ABC";$("caseLab").textContent=lower?"minuscules":"MAJUSCULES"}
+applyCase();
+const onBtn=document.querySelector('[data-c="on"]');
+function powerOff(){if(S.mode==="off")return;hush();setPic("");S={mode:"off"};show("");vfd.classList.add("off");onBtn.classList.remove("lit");setInfo("Appuie sur MARCHE");beep(330,.15)}
+async function power(){
+ if(S.mode!=="off")return;
+ onBtn.classList.add("lit");
+ try{ac=ac||new (window.AudioContext||window.webkitAudioContext)();ac.resume()}catch(e){}
+ if("speechSynthesis" in window){speechSynthesis.cancel();pickVoice()}
+ const s=hush();vfd.classList.remove("off");jingle();show("BONJOUR");menu();
+ await say("Bonjour. Choisis un jeu.");if(s===seq&&S.mode==="menu")show("");
+}
+const SYL="ba bi bo bu ma mi mo mu pa pi po pu ta ti to tu la li lo lu ra ri ro ru na ni no va vi vo fa fi fo sa si so ou pou mou fou cha chi cho bra pra tra cra gra fla pla bla cli pli fri gri mon ton son bon pan lan ran fin pin".split(" ");
+const IMGS=[["🐱","chat","un"],["🐶","chien","un"],["🐰","lapin","un"],["🐮","vache","une"],["🦁","lion","un"],["🐻","ours","un"],["🐺","loup","un"],["🦓","zèbre","un"],["🐼","panda","un"],["🦉","hibou","un"],["🐔","poule","une"],["🦀","crabe","un"],["🐀","rat","un"],["🍎","pomme","une"],["🍐","poire","une"],["🍞","pain","un"],["🥝","kiwi","un"],["🍕","pizza","une"],["🌙","lune","une"],["🌳","arbre","un"],["🌸","fleur","une"],["🌹","rose","une"],["🚲","vélo","un"],["✈️","avion","un"],["🚂","train","un"],["🚌","bus","un"],["🚀","fusée","une"],["📖","livre","un"],["🔑","clé","une"],["🛏️","lit","un"],["👃","nez","un"],["🦷","dent","une"],["✋","main","une"],["🦶","pied","un"]];
+const pic=$("pic");
+const setPic=e=>{pic.textContent=e||"";pic.classList.toggle("show",!!e)};
+function startImg(){hush();const l=shuffle(IMGS).slice(0,10);
+ S={mode:"spell",kind:"img",words:l.map(x=>x[1]),pics:l.map(x=>x[0]),arts:l.map(x=>x[2]),helped:0,i:0,score:0,tries:0,input:"",busy:false};nextSpell()}
+const isImg=()=>S.kind==="img";
+const named=()=>`${S.arts[S.i]} ${S.words[S.i]}`;
+const ask=w=>isImg()?"Écris ce que tu vois.":(S.kind==="syll"?"Écris : ":"Épelle : ")+w;
+/* syllabe : le modèle reste affiché à gauche, ce que tape l'enfant s'écrit à droite */
+const disp=()=>S.kind==="syll"?show(S.words[S.i].toUpperCase().padEnd(5)+S.input,true):show(S.input,true);
+const lab=()=>isImg()?`Image ${S.i+1}/10 — écris ce que tu vois`:S.kind==="syll"?`Syllabe ${S.i+1}/10 — écris la même à droite`:`Mot ${S.i+1}/10 — écris le mot que tu entends`;
+function startSyll(){hush();setPic("");S={mode:"spell",kind:"syll",words:shuffle(SYL).slice(0,10),i:0,score:0,tries:0,input:"",busy:false};nextSpell()}
+function startCP(game){setPic("");hush();
+ S={mode:game,words:cpWords(),i:0,score:0,tries:0,input:"",busy:false,helped:0};
+ game==="spell"?nextSpell():nextSay();
+}
+/* ÉPELLE */
+async function nextSpell(){
+ const s=hush();
+ if(S.i>=S.words.length){const sc=S.score;show(`${sc} SUR 10`);menu("Partie finie — choisis un jeu");
+  const hp=S.helped||0;await say(`Tu as ${sc} bonne${sc>1?"s":""} réponse${sc>1?"s":""} sur dix`+(hp?`, dont ${hp} avec de l'aide.`:"."));
+  if(s===seq&&sc>=8)await say("Bravo !");return}
+ S.input="";S.tries=0;S.help=0;S.busy=false;setPic(isImg()?S.pics[S.i]:"");disp();setInfo(lab(),`Score ${S.score}`);
+ await say(ask(S.words[S.i]));
+}
+/* AIDE (jeu image) : 1er appui = le mot est dit + nombre de lettres ; ensuite une lettre de plus à chaque appui */
+async function help(){
+ if(S.mode!=="spell"||S.kind==="syll"){hush();return say("Il n'y a pas d'aide dans ce jeu.")}
+ if(S.busy)return;const W=S.words[S.i].toUpperCase();hush();
+ if(!S.help){S.help=1;setInfo(lab(),`${W.length} lettres · Score ${S.score}`);return say((isImg()?`C'est ${named()}.`:`Le mot est : ${S.words[S.i]}.`)+` Il y a ${W.length} lettres.`)}
+ let k=0;while(k<S.input.length&&S.input[k]===W[k])k++;
+ if(k>=W.length)return say("Le mot est complet. Touche entrée.");
+ S.input=W.slice(0,k+1);S.help++;disp();
+ return say(k+1>=W.length?NAMES[W[k]]+". Le mot est complet, touche entrée.":NAMES[W[k]]+". Continue.");
+}
+async function checkSpell(){
+ if(!S.input||S.busy)return;
+ const w=S.words[S.i], W=w.toUpperCase(), s=hush();S.busy=true;
+ if(S.input===W){S.score++;if(S.help)S.helped++;show("CORRECT");beep(988,.08);beep(1319,.12,.05,.09);setInfo(lab(),`Score ${S.score}`);
+  await say(["Correct !","C'est exact !","Très bien !"][Math.random()*3|0]+(isImg()?" C'est "+named()+".":""));if(s!==seq)return;S.i++;return nextSpell()}
+ if(S.tries===0){S.tries=1;show("INEXACT");beep(196,.25,.06);
+  await say("C'est inexact. Essaie encore une fois. "+(isImg()?"C'est "+named()+". Écris : "+w:ask(w)));if(s!==seq)return;S.input="";S.busy=false;disp();return}
+ show("");beep(196,.25,.06);await say(S.kind==="syll"?`C'est inexact. La syllabe ${w} s'écrit :`:`C'est inexact. La bonne orthographe de ${w} est :`);
+ for(let k=0;k<W.length;k++){if(s!==seq)return;show((S.kind==="syll"?W.padEnd(5):"")+W.slice(0,k+1));await say(NAMES[W[k]]||W[k])}
+ if(s!==seq)return;await wait(900);if(s!==seq)return;S.i++;nextSpell();
+}
+/* DIS-LE */
+async function nextSay(){
+ const s=hush();
+ if(S.i>=S.words.length){show("FIN");menu("Partie finie — choisis un jeu");await say("C'est fini. Bravo !");return}
+ const w=S.words[S.i];show(w);setInfo(`Mot ${S.i+1}/10 — lis le mot à voix haute`,"ENTRÉE = suivant");
+ await say("Dis-le : "+w);
+}
+/* LETTRE : une lettre est montrée et dite, l'enfant appuie sur la bonne touche */
+const keyOf=l=>document.querySelector(`[data-l="${l}"]`);
+async function startLetters(){setPic("");
+ hush();const az=LETTERS.slice(0,26);
+ S={mode:"letters",list:shuffle(az).slice(0,10),i:0,score:0,tries:0,busy:false};nextLetter();
+}
+async function nextLetter(){
+ const s=hush();
+ if(S.i>=S.list.length){const sc=S.score;show(`${sc} SUR 10`);menu("Partie finie — choisis un jeu");
+  await say(`Tu as ${sc} bonne${sc>1?"s":""} réponse${sc>1?"s":""} sur dix.`);
+  if(s===seq&&sc>=8)await say("Bravo !");return}
+ S.tries=0;S.busy=false;const l=S.list[S.i];show("    "+l);setInfo(`Lettre ${S.i+1}/10 — appuie sur la bonne touche`,`Score ${S.score}`);
+ await say("Trouve la lettre : "+NAMES[l]);
+}
+async function checkLetter(l){
+ if(S.busy)return;const t=S.list[S.i],s=hush();S.busy=true;
+ if(l===t){S.score++;show("CORRECT");beep(988,.08);beep(1319,.12,.05,.09);setInfo(`Lettre ${S.i+1}/10`,`Score ${S.score}`);
+  await say(["Correct !","C'est exact !","Très bien !"][Math.random()*3|0]);if(s!==seq)return;S.i++;return nextLetter()}
+ beep(196,.25,.06);
+ if(S.tries===0){S.tries=1;show("INEXACT");
+  await say(`Non, ça c'est ${NAMES[l]}. Essaie encore une fois. Trouve la lettre : ${NAMES[t]}`);
+  if(s!==seq)return;show("    "+t);S.busy=false;return}
+ const k=keyOf(t);show("    "+t);k&&k.classList.add("hint");
+ await say(`C'est inexact. La lettre ${NAMES[t]}, c'est cette touche.`);
+ await wait(800);k&&k.classList.remove("hint");if(s!==seq)return;S.i++;nextLetter();
+}
+/* MOT MYSTÈRE */
+async function startMystery(){setPic("");
+ const s=hush();const pool=LONGS;
+ S={mode:"mystery",word:pool[Math.random()*pool.length|0].toUpperCase(),found:new Set(),wrong:[],done:false};
+ drawMystery();await say("Trouve le mot mystère.");
+}
+function drawMystery(){
+ const W=S.word;show([...W].map(c=>S.found.has(base(c))?c:"_").join(""));
+ setInfo(`Essais restants : ${MAXMISS-S.wrong.length}`,S.wrong.length?"Raté : "+S.wrong.join(" "):"");
+}
+async function guess(l){
+ if(S.done)return;const b=base(l);const s=hush();
+ if(S.found.has(b)||S.wrong.includes(b)){await say("Déjà essayé.");return}
+ const hit=[...S.word].some(c=>base(c)===b);
+ if(hit){S.found.add(b);beep(880,.05)}else{S.wrong.push(b);beep(196,.15,.06)}
+ drawMystery();
+ const won=[...S.word].every(c=>S.found.has(base(c))), lost=S.wrong.length>=MAXMISS;
+ if(won||lost){S.done=true;show(S.word);setInfo(won?"Gagné ! MOT MYSTÈRE pour rejouer":"Perdu ! MOT MYSTÈRE pour rejouer");
+  if(won){jingle();await say("Correct ! Le mot était : "+S.word.toLowerCase())}
+  else await say("Perdu. Le mot mystère était : "+S.word.toLowerCase());return}
+ await say(NAMES[b]||b);
+}
+
+/* ---- entrées ---- */
+async function letter(l){
+ beep(1200,.02,.03);
+ switch(S.mode){
+  case "spell": if(S.busy||S.input.length>=(S.kind==="syll"?5:N))return;S.input+=l;disp();hush();await say(NAMES[l]);break;
+  case "mystery": guess(l);break;
+  case "letters": checkLetter(l);break;
+  case "sayit": S.i++;nextSay();break;
+ }
+}
+function ctl(c){
+ if(c==="case"){lower=!lower;try{localStorage.setItem("dp-case",lower?"min":"maj")}catch(e){}applyCase();
+  cells.forEach(x=>x.textContent=lower?x.textContent.toLowerCase():x.textContent.toUpperCase());beep(900,.03,.04);return}
+ if(c==="on")return power();
+ if(c==="off")return powerOff();
+ if(S.mode==="off"){beep(150,.08);return}
+ beep(700,.03,.04);
+ switch(c){
+  case "spell":case "sayit":return startCP(c);
+  case "mystery":return startMystery();
+  case "img":return startImg();
+  case "help":return help();
+  case "letters":return startLetters();
+  case "syll":return startSyll();
+  case "repeat":hush();
+   if(S.mode==="spell")return say(isImg()?"Écris ce que tu vois. C'est "+named()+".":ask(S.words[S.i]));
+   if(S.mode==="sayit")return say("Dis-le : "+S.words[S.i]);
+   if(S.mode==="mystery")return say("Trouve le mot mystère.");
+   if(S.mode==="letters"&&!S.busy)return say("Trouve la lettre : "+NAMES[S.list[S.i]]);
+   return say("Choisis un jeu.");
+  case "del":if(S.mode==="spell"&&!S.busy){S.input=S.input.slice(0,-1);disp()}return;
+  case "enter":if(S.mode==="spell")return checkSpell();if(S.mode==="sayit"){S.i++;return nextSay()}return;
+ }
+}
+function press(el){if(!el)return;el.classList.add("down");setTimeout(()=>el.classList.remove("down"),110);
+ if(el.dataset.l){if(S.mode==="off"){beep(150,.08);return}letter(el.dataset.l)}else ctl(el.dataset.c)}
+document.addEventListener("pointerdown",e=>{const b=e.target.closest("button.k");if(b&&b.dataset.c!=="on"){e.preventDefault();press(b)}});
+/* MARCHE au "click" : iPad n'autorise la voix qu'après un vrai tap */
+onBtn.addEventListener("click",e=>press(e.currentTarget));
+document.addEventListener("keydown",e=>{if(e.repeat||e.metaKey||e.ctrlKey)return;let k=e.key;
+ if(k==="Enter")k="enter";else if(k==="Backspace")k="del";else k=k.toUpperCase();
+ const el=document.querySelector(`[data-l="${k}"],[data-c="${k}"]`);if(el){e.preventDefault();press(el)}});
+}
+</script>
+<script>if("serviceWorker" in navigator)window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}))</script>
+</body>
+</html>

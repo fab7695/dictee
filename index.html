@@ -6,7 +6,7 @@
 <title>Ma Dictée Parlante</title>
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#c4261f">
-<meta name="app-version" content="1.3">
+<meta name="app-version" content="1.4">
 <meta name="mobile-web-app-capable" content="yes">
 <link rel="icon" href="icons/icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -69,6 +69,10 @@ box-shadow:0 5px 0 var(--keyd),0 7px 8px rgba(0,0,0,.35);transition:transform .0
 .upd button{background:transparent;color:var(--ink);border:2px solid currentColor;border-radius:999px;padding:8px 16px;min-height:44px;font-weight:600;opacity:.8}
 .upd button:disabled{opacity:.4}
 #updmsg{opacity:.75}
+.dbg{width:min(980px,100%);margin:12px auto 0;background:#111;color:#9ff5dc;border-radius:12px;padding:12px;font:13px/1.45 ui-monospace,monospace}
+.dbgbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px}.dbgbar b{flex:1;color:#f6c12c}
+.dbgbar button{background:#333;color:#fff;border:0;border-radius:8px;padding:8px 12px;min-height:40px}
+#dbglog{margin:0;white-space:pre-wrap;max-height:50vh;overflow:auto}
 .note{max-width:980px;font-size:14px;opacity:.75;text-align:center;margin:18px 8px 0}
 @media(max-width:600px){.cmds{grid-template-columns:repeat(4,minmax(0,1fr))}.grille{display:none}.toy{border-radius:24px}.keys{gap:4px}.k{border-radius:9px}}
 @media(prefers-reduced-motion:reduce){.pic.show{animation:none}.cell.cur{animation:none}.k{transition:none}}
@@ -127,44 +131,59 @@ if("speechSynthesis" in window){pickVoice();speechSynthesis.onvoiceschanged=pick
 function beep(f,d=.05,vol=.05,t0=0){if(!ac)return;const o=ac.createOscillator(),g=ac.createGain();o.type="square";o.frequency.value=f;
  const t=ac.currentTime+t0;g.gain.setValueAtTime(vol,t);g.gain.exponentialRampToValueAtTime(.0001,t+d);o.connect(g).connect(ac.destination);o.start(t);o.stop(t+d+.02)}
 function jingle(){[523,659,784,1047].forEach((f,i)=>beep(f,.12,.05,i*.11))}
-/* Voix robuste pour Chrome Android : on ne relance jamais la voix juste après l'avoir coupée,
-   on garde les phrases en mémoire (sinon le navigateur les perd) et on relance si rien ne démarre. */
+/* Journal de diagnostic : touche 5 fois le numéro de version sous le jeu pour l'afficher */
+const LOG=[];let logView=null;
+function log(m){const d=new Date();LOG.push(d.toTimeString().slice(0,8)+" "+m);if(LOG.length>60)LOG.shift();if(logView)logView.textContent=LOG.join("\n")}
+/* Voix pour Chrome Android :
+   - jamais de nouvelle phrase moins de 0,4 s après une coupure,
+   - pas de coupure si rien ne parle,
+   - on laisse au moteur vocal jusqu'à 4 s pour démarrer (il est lent après une coupure),
+   - si une phrase est perdue ou interrompue par erreur, on la redit une fois. */
 const SS=("speechSynthesis" in window)?speechSynthesis:null;
 const wait=ms=>new Promise(r=>setTimeout(r,ms));
 const keep=new Set();let lastCut=0;
 let seq=0;
+function speakOnce(text,my){return new Promise(res=>{
+ const u=new SpeechSynthesisUtterance(text);u.lang="fr-FR";if(voice&&voice.localService)u.voice=voice;u.rate=.82;u.pitch=.5;
+ keep.add(u);let started=false,done=false;
+ const fin=v=>{if(!done){done=true;keep.delete(u);res(v)}};
+ u.onstart=()=>{started=true;log("voix > "+text)};
+ u.onend=()=>fin("ok");
+ u.onerror=e=>{log("voix erreur ("+e.error+") : "+text);fin(my===seq&&!started?"retry":"ok")};
+ try{if(SS.paused)SS.resume();SS.speak(u)}catch(e){log("voix exception "+e.message);fin("ok")}
+ setTimeout(()=>{if(!started&&!done&&!SS.speaking&&!SS.pending&&my===seq){log("voix muette, relance : "+text);fin("retry")}},4000);
+ setTimeout(()=>fin("ok"),5000+text.length*130);
+})}
 async function say(text){
  const my=seq;
  if(!SS){await wait(400+text.length*55);return}
- const gap=Date.now()-lastCut;if(gap<300)await wait(300-gap);
- if(my!==seq)return;
- if(SS.paused)SS.resume();
- const once=()=>new Promise(res=>{
-  const u=new SpeechSynthesisUtterance(text);u.lang="fr-FR";if(voice)u.voice=voice;u.rate=.82;u.pitch=.5;
-  keep.add(u);let started=false,done=false;
-  const fin=ok=>{if(!done){done=true;keep.delete(u);res(ok)}};
-  u.onstart=()=>{started=true};u.onend=()=>fin(true);u.onerror=()=>fin(started);
-  SS.speak(u);
-  setTimeout(()=>{if(!started&&!done)fin(false)},1500);
-  setTimeout(()=>fin(true),2500+text.length*120);
- });
- if(!(await once())&&my===seq){SS.cancel();await wait(300);if(my===seq){if(voice===null)pickVoice();await once()}}
+ const gap=Date.now()-lastCut;if(gap<400)await wait(400-gap);
+ for(let k=0;k<2;k++){
+  if(my!==seq)return;
+  const r=await speakOnce(text,my);
+  if(r!=="retry")return;
+  await wait(400);
+ }
 }
 function hush(){seq++;stopListen();if(SS&&(SS.speaking||SS.pending)){SS.cancel();lastCut=Date.now()}return seq}
+window.__dbg=(el,inf)=>{logView=el;if(el)el.textContent=LOG.join("\n")||"(rien pour l'instant : joue, puis reviens ici)"};
 document.addEventListener("visibilitychange",()=>{if(SS&&document.visibilityState==="visible"&&SS.paused)SS.resume()});
 /* ---- micro (jeu DIS-LE) ---- */
 const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-let rec=null,micOff=!SR;
+let rec=null,micOff=!SR,micErr="";
 function stopListen(){if(rec){const r=rec;rec=null;try{r.abort()}catch(e){}}}
 function listen(){return new Promise(res=>{
- if(micOff)return res(null);
+ micErr="";
+ if(micOff){micErr="indisponible";return res(null)}
  const r=new SR();rec=r;r.lang="fr-FR";r.interimResults=false;r.maxAlternatives=5;r.continuous=false;
  let out=null;
- r.onresult=e=>{out=[...e.results[0]].map(a=>a.transcript)};
- r.onerror=e=>{if(e.error==="not-allowed"||e.error==="service-not-allowed"||e.error==="audio-capture")micOff=true};
- r.onend=()=>{if(rec===r)rec=null;res(out)};
- try{r.start()}catch(e){rec=null;return res(null)}
- setTimeout(()=>{try{r.stop()}catch(e){}},6000);
+ r.onstart=()=>log("micro ouvert");
+ r.onresult=e=>{out=[...e.results[0]].map(a=>a.transcript);log("micro a entendu : "+out.join(" | "))};
+ r.onerror=e=>{micErr=e.error;log("micro erreur : "+e.error);
+  if(e.error==="not-allowed"||e.error==="service-not-allowed"||e.error==="audio-capture"||e.error==="language-not-supported")micOff=true};
+ r.onend=()=>{log("micro fermé");if(rec===r)rec=null;res(out)};
+ try{r.start()}catch(e){log("micro exception "+e.message);rec=null;micErr="exception";return res(null)}
+ setTimeout(()=>{try{r.stop()}catch(e){}},7000);
 })}
 const lev=(a,b)=>{const d=Array.from({length:a.length+1},(_,i)=>[i]);for(let j=1;j<=b.length;j++)d[0][j]=j;
  for(let i=1;i<=a.length;i++)for(let j=1;j<=b.length;j++)d[i][j]=Math.min(d[i-1][j]+1,d[i][j-1]+1,d[i-1][j-1]+(a[i-1]===b[j-1]?0:1));return d[a.length][b.length]};
@@ -255,19 +274,23 @@ async function nextSay(){
   show("FIN");menu("Partie finie — choisis un jeu");await say("C'est fini. Bravo !");return}
  S.tries=0;const w=S.words[S.i];show(w);setInfo(`Mot ${S.i+1}/10 — lis le mot à voix haute`,micOff?"ENTRÉE = suivant":`Score ${S.score}`);
  await say("Dis-le : "+w);if(s!==seq||micOff)return;
- await wait(150);if(s===seq)hear(s);
+ hear(s);
 }
 async function hear(s){
- const w=S.words[S.i];setInfo(`Mot ${S.i+1}/10 — micro ouvert : parle !`,`Score ${S.score}`);
+ const w=S.words[S.i];
+ await wait(400);if(s!==seq)return;
+ beep(1046,.09,.05);await wait(250);if(s!==seq)return;
+ setInfo(`Mot ${S.i+1}/10 — micro ouvert : dis le mot !`,`Score ${S.score}`);
  const alts=await listen();if(s!==seq)return;
- if(alts===null&&micOff){setInfo(`Mot ${S.i+1}/10 — lis le mot à voix haute`,"ENTRÉE = suivant");
-  await say("Je n'ai pas accès au micro. Lis le mot, puis touche entrée.");return}
+ if(alts===null&&(micOff||micErr==="network"||micErr==="exception")){
+  setInfo(`Mot ${S.i+1}/10 — lis le mot à voix haute`,"ENTRÉE = suivant");
+  await say(micErr==="network"?"Le micro a besoin d'internet. Lis le mot, puis touche entrée.":"Je n'ai pas accès au micro. Lis le mot, puis touche entrée.");return}
  S.usedMic=true;
  if(alts&&heard(alts,w)){S.score++;show("CORRECT");beep(988,.08);beep(1319,.12,.05,.09);setInfo(`Mot ${S.i+1}/10`,`Score ${S.score}`);
   await say(["Correct !","Bien dit !","Très bien !"][Math.random()*3|0]);if(s!==seq)return;S.i++;return nextSay()}
  if(S.tries===0){S.tries=1;beep(196,.2,.05);
   await say(alts?"Je n'ai pas bien compris. Essaie encore une fois : "+w:"Je n'ai rien entendu. Répète : "+w);
-  if(s!==seq)return;await wait(150);if(s===seq)hear(s);return}
+  if(s!==seq)return;hear(s);return}
  await say("Bien essayé. Le mot était : "+w);if(s!==seq)return;S.i++;nextSay();
 }
 /* LETTRE : une lettre est montrée et dite, l'enfant appuie sur la bonne touche */
@@ -330,6 +353,7 @@ async function letter(l){
  }
 }
 function ctl(c){
+ log("bouton "+c+" (mode "+S.mode+")");
  if(c==="case"){lower=!lower;try{localStorage.setItem("dp-case",lower?"min":"maj")}catch(e){}applyCase();
   cells.forEach(x=>x.textContent=lower?x.textContent.toLowerCase():x.textContent.toUpperCase());beep(900,.03,.04);return}
  if(c==="on")return power();
@@ -364,11 +388,19 @@ document.addEventListener("keydown",e=>{if(e.repeat||e.metaKey||e.ctrlKey)return
 }
 </script>
 <p class="upd"><button id="upd" type="button">↻ Mettre à jour le jeu</button><span id="updmsg"></span></p>
+<div id="dbg" class="dbg" hidden><div class="dbgbar"><b>Journal du son et du micro</b><button id="dbgcopy" type="button">Copier</button><button id="dbgclose" type="button">Fermer</button></div><pre id="dbglog"></pre></div>
 <script>
 {
 const VERSION=document.querySelector('meta[name="app-version"]').content;
 const btn=document.getElementById("upd"),msg=document.getElementById("updmsg");
 msg.textContent="Version "+VERSION;
+let taps=0,tapT=0;const dbg=document.getElementById("dbg"),dl=document.getElementById("dbglog");
+const info=()=>["Version "+VERSION,"Appli installée : "+(matchMedia("(display-mode: standalone),(display-mode: fullscreen)").matches?"oui":"non"),
+ "Voix dispo : "+(window.speechSynthesis?speechSynthesis.getVoices().filter(v=>/^fr/i.test(v.lang)).map(v=>v.name+(v.localService?"":" (en ligne)")).join(", ")||"aucune voix française":"non"),
+ "Micro (reconnaissance) : "+((window.SpeechRecognition||window.webkitSpeechRecognition)?"oui":"non"),"Internet : "+(navigator.onLine?"oui":"non"),"----"].join("\n");
+msg.addEventListener("click",()=>{const n=Date.now();taps=n-tapT<700?taps+1:1;tapT=n;if(taps>=5){taps=0;dbg.hidden=false;window.__dbg(dl,info);dbg.scrollIntoView({behavior:"smooth"})}});
+document.getElementById("dbgclose").addEventListener("click",()=>{dbg.hidden=true;window.__dbg(null)});
+document.getElementById("dbgcopy").addEventListener("click",async e=>{try{await navigator.clipboard.writeText(info()+"\n"+dl.textContent);e.target.textContent="Copié !"}catch(x){e.target.textContent="Copie impossible"}setTimeout(()=>e.target.textContent="Copier",1500)});
 if("serviceWorker" in navigator)window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));
 btn.addEventListener("click",async()=>{
  btn.disabled=true;msg.textContent="Recherche d'une mise à jour…";

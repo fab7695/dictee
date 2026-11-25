@@ -6,7 +6,7 @@
 <title>Ma Dictée Parlante</title>
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#c4261f">
-<meta name="app-version" content="1.7">
+<meta name="app-version" content="1.8">
 <meta name="mobile-web-app-capable" content="yes">
 <link rel="icon" href="icons/icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -156,11 +156,13 @@ function speakOnce(text,my){return new Promise(res=>{
  keep.add(u);let started=false,done=false;
  const fin=v=>{if(!done){done=true;keep.delete(u);res(v)}};
  u.onstart=()=>{started=true;log("voix > "+text)};
- u.onend=()=>fin(started?"ok":"retry");
+ u.onend=()=>{if(!started)log("voix finie (sans signal de départ) : "+text);fin("ok")};
  u.onerror=e=>{log("voix erreur ("+e.error+") : "+text);fin(my===seq&&!started?"retry":"ok")};
  try{if(SS.paused)SS.resume();SS.speak(u)}catch(e){log("voix exception "+e.message);fin("retry")}
- setTimeout(()=>{if(!started&&!done&&my===seq){log("voix bloquée (speaking="+SS.speaking+"), remise à zéro : "+text);fin("retry")}},2500);
- setTimeout(()=>fin("ok"),5000+text.length*130);
+ setTimeout(()=>{if(started||done||my!==seq)return;
+  if(SS.speaking||SS.pending)log("voix en attente du moteur Android… : "+text);
+  else{log("voix perdue, relance : "+text);fin("retry")}},2500);
+ setTimeout(()=>fin("ok"),8000+text.length*130);
 })}
 async function say(text){
  const my=seq;

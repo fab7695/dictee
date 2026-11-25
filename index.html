@@ -6,7 +6,7 @@
 <title>Ma Dictée Parlante</title>
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#c4261f">
-<meta name="app-version" content="1.4">
+<meta name="app-version" content="1.5">
 <meta name="mobile-web-app-capable" content="yes">
 <link rel="icon" href="icons/icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -114,7 +114,7 @@ box-shadow:0 5px 0 var(--keyd),0 7px 8px rgba(0,0,0,.35);transition:transform .0
 const COURTS="ami lit nez rue sac mur bus riz sol bol pot feu jeu roi dos fil été".split(" ");
 const LONGS="chat loup lune papa maman pomme robe pain table livre fille rose jupe moto carte lapin poule vache midi joli école mardi lundi neige pluie rouge vert bleu jaune noir lait sucre dame tasse porte dent main pied ours lion poire".split(" ");
 const cpWords=()=>[...shuffle(COURTS).slice(0,4),...shuffle(LONGS).slice(0,6)];
-const NAMES={A:"a",B:"bé",C:"cé",D:"dé",E:"euh",F:"èf",G:"gé",H:"hache",I:"i",J:"ji",K:"ka",L:"elle",M:"emme",N:"ène",O:"o",P:"pé",Q:"cu",R:"erre",S:"esse",T:"té",U:"u",V:"vé",W:"double vé",X:"ixe",Y:"i grec",Z:"zède","É":"e accent aigu","È":"e accent grave","Ê":"e accent circonflexe","À":"a accent grave","Ç":"cé cédille"};
+const NAMES={A:"a",B:"bé",C:"cé",D:"dé",E:"euh",F:"effe",G:"gé",H:"hache",I:"i",J:"ji",K:"ka",L:"elle",M:"emme",N:"enne",O:"o",P:"pé",Q:"Q",R:"erre",S:"esse",T:"té",U:"u",V:"vé",W:"double vé",X:"ixe",Y:"i grec",Z:"zède","É":"e accent aigu","È":"e accent grave","Ê":"e accent circonflexe","À":"a accent grave","Ç":"cé cédille"};
 const LETTERS="ABCDEFGHIJKLMNOPQRSTUVWXYZÉÈÊÀÇ".split("");
 const N=10, MAXMISS=8;
 const $=id=>document.getElementById(id);

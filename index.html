@@ -6,7 +6,7 @@
 <title>Ma Dictée Parlante</title>
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#c4261f">
-<meta name="app-version" content="1.5">
+<meta name="app-version" content="1.6">
 <meta name="mobile-web-app-capable" content="yes">
 <link rel="icon" href="icons/icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -73,6 +73,10 @@ box-shadow:0 5px 0 var(--keyd),0 7px 8px rgba(0,0,0,.35);transition:transform .0
 .dbgbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px}.dbgbar b{flex:1;color:#f6c12c}
 .dbgbar button{background:#333;color:#fff;border:0;border-radius:8px;padding:8px 12px;min-height:40px}
 #dbglog{margin:0;white-space:pre-wrap;max-height:50vh;overflow:auto}
+.mic{display:flex;align-items:center;justify-content:center;gap:14px;width:100%;margin-top:10px;min-height:72px;border:0;border-radius:14px;background:#2fbf55;color:#fff;font:600 clamp(18px,2.6vw,24px) Fredoka,sans-serif;box-shadow:0 5px 0 #1b7d36;cursor:pointer}
+.mic b{font-size:1.5em}.mic[hidden]{display:none}
+.mic.live{background:#e23b2e;box-shadow:0 0 0 6px rgba(226,59,46,.35),0 5px 0 #8e100b;animation:pulse 1s infinite}
+@keyframes pulse{50%{box-shadow:0 0 0 14px rgba(226,59,46,.15),0 5px 0 #8e100b}}
 .note{max-width:980px;font-size:14px;opacity:.75;text-align:center;margin:18px 8px 0}
 @media(max-width:600px){.cmds{grid-template-columns:repeat(4,minmax(0,1fr))}.grille{display:none}.toy{border-radius:24px}.keys{gap:4px}.k{border-radius:9px}}
 @media(prefers-reduced-motion:reduce){.pic.show{animation:none}.cell.cur{animation:none}.k{transition:none}}
@@ -93,6 +97,7 @@ box-shadow:0 5px 0 var(--keyd),0 7px 8px rgba(0,0,0,.35);transition:transform .0
     <div id="pic" class="pic" aria-live="polite"></div>
     <div id="vfd" class="vfd off" aria-live="polite"></div>
     <div class="info"><span id="info">Appuie sur MARCHE</span><span id="stat"></span></div>
+    <button id="mic" class="mic" type="button" hidden><b>🎤</b><span>Appuie et parle</span></button>
   </div>
   <div id="keys" class="keys"></div>
   <div class="cmds">
@@ -165,7 +170,7 @@ async function say(text){
   await wait(400);
  }
 }
-function hush(){seq++;stopListen();if(SS&&(SS.speaking||SS.pending)){SS.cancel();lastCut=Date.now()}return seq}
+function hush(){seq++;stopListen();if(S&&S.mode!=="sayit"){const m=document.getElementById("mic");if(m)m.hidden=true}if(SS&&(SS.speaking||SS.pending)){SS.cancel();lastCut=Date.now()}return seq}
 window.__dbg=(el,inf)=>{logView=el;if(el)el.textContent=LOG.join("\n")||"(rien pour l'instant : joue, puis reviens ici)"};
 document.addEventListener("visibilitychange",()=>{if(SS&&document.visibilityState==="visible"&&SS.paused)SS.resume()});
 /* ---- micro (jeu DIS-LE) ---- */
@@ -203,7 +208,7 @@ const base=c=>c.normalize("NFD").replace(/[̀-ͯ]/g,"");
 
 /* ---- état ---- */
 let S={mode:"off"};
-const menu=(msg="Choisis un jeu")=>{S={mode:"menu"};setInfo(msg);setPic("")};
+const menu=(msg="Choisis un jeu")=>{S={mode:"menu"};document.getElementById("mic").hidden=true;setInfo(msg);setPic("")};
 
 function applyCase(){document.querySelectorAll("[data-l]").forEach(b=>b.textContent=lower?b.dataset.l.toLowerCase():b.dataset.l);
  const cb=document.querySelector('[data-c="case"]');cb.textContent=lower?"abc":"ABC";$("caseLab").textContent=lower?"minuscules":"MAJUSCULES"}
@@ -266,32 +271,38 @@ async function checkSpell(){
  if(s!==seq)return;await wait(900);if(s!==seq)return;S.i++;nextSpell();
 }
 /* DIS-LE */
+/* DIS-LE : le micro s'ouvre quand l'enfant appuie sur le gros bouton micro (plus fiable sur Android) */
+const micBtn=()=>document.getElementById("mic");
+function micShow(on,label){const m=micBtn();m.hidden=!on;m.disabled=false;m.classList.remove("live");if(label)m.querySelector("span").textContent=label}
 async function nextSay(){
- const s=hush();
+ const s=hush();micShow(false);
  if(S.i>=S.words.length){
   if(S.usedMic){const sc=S.score;show(`${sc} SUR 10`);menu("Partie finie — choisis un jeu");
    await say(`Tu as ${sc} bonne${sc>1?"s":""} réponse${sc>1?"s":""} sur dix.`);if(s===seq&&sc>=8)await say("Bravo !");return}
   show("FIN");menu("Partie finie — choisis un jeu");await say("C'est fini. Bravo !");return}
- S.tries=0;const w=S.words[S.i];show(w);setInfo(`Mot ${S.i+1}/10 — lis le mot à voix haute`,micOff?"ENTRÉE = suivant":`Score ${S.score}`);
- await say("Dis-le : "+w);if(s!==seq||micOff)return;
- hear(s);
+ S.tries=0;S.listening=false;const w=S.words[S.i];show(w);
+ if(micOff){setInfo(`Mot ${S.i+1}/10 — lis le mot à voix haute`,"ENTRÉE = suivant");await say("Dis-le : "+w);return}
+ setInfo(`Mot ${S.i+1}/10 — appuie sur le micro et dis le mot`,`Score ${S.score}`);micShow(true,"Appuie et parle");
+ await say("Dis-le : "+w);
 }
-async function hear(s){
- const w=S.words[S.i];
- await wait(400);if(s!==seq)return;
- beep(1046,.09,.05);await wait(250);if(s!==seq)return;
- setInfo(`Mot ${S.i+1}/10 — micro ouvert : dis le mot !`,`Score ${S.score}`);
- const alts=await listen();if(s!==seq)return;
- if(alts===null&&(micOff||micErr==="network"||micErr==="exception")){
-  setInfo(`Mot ${S.i+1}/10 — lis le mot à voix haute`,"ENTRÉE = suivant");
-  await say(micErr==="network"?"Le micro a besoin d'internet. Lis le mot, puis touche entrée.":"Je n'ai pas accès au micro. Lis le mot, puis touche entrée.");return}
+async function hear(){
+ if(S.mode!=="sayit"||S.listening)return;
+ const s=hush();S.listening=true;const w=S.words[S.i];
+ const m=micBtn();m.classList.add("live");m.disabled=true;m.querySelector("span").textContent="J'écoute…";
+ setInfo(`Mot ${S.i+1}/10 — parle maintenant !`,`Score ${S.score}`);
+ const alts=await listen();if(s!==seq){S.listening=false;return}
+ S.listening=false;micShow(true,"Appuie et parle");
+ if(alts===null&&micErr&&micErr!=="no-speech"&&micErr!=="aborted"){
+  const why={"not-allowed":"le micro est refusé","service-not-allowed":"la reconnaissance vocale est bloquée","network":"il faut internet","audio-capture":"le micro est occupé","language-not-supported":"le français n'est pas installé","indisponible":"pas de reconnaissance vocale","exception":"erreur au démarrage"}[micErr]||micErr;
+  setInfo(`Micro : ${why}`,"ENTRÉE = suivant");
+  await say("Le micro ne marche pas. Lis le mot, puis touche entrée.");return}
  S.usedMic=true;
- if(alts&&heard(alts,w)){S.score++;show("CORRECT");beep(988,.08);beep(1319,.12,.05,.09);setInfo(`Mot ${S.i+1}/10`,`Score ${S.score}`);
+ if(alts&&heard(alts,w)){micShow(false);S.score++;show("CORRECT");beep(988,.08);beep(1319,.12,.05,.09);setInfo(`Mot ${S.i+1}/10`,`Score ${S.score}`);
   await say(["Correct !","Bien dit !","Très bien !"][Math.random()*3|0]);if(s!==seq)return;S.i++;return nextSay()}
- if(S.tries===0){S.tries=1;beep(196,.2,.05);
-  await say(alts?"Je n'ai pas bien compris. Essaie encore une fois : "+w:"Je n'ai rien entendu. Répète : "+w);
-  if(s!==seq)return;hear(s);return}
- await say("Bien essayé. Le mot était : "+w);if(s!==seq)return;S.i++;nextSay();
+ if(S.tries===0){S.tries=1;beep(196,.2,.05);show(w);
+  setInfo(alts?`J'ai entendu « ${alts[0]} » — réessaie`:"Je n'ai rien entendu — réessaie",`Score ${S.score}`);
+  await say((alts?"Je n'ai pas bien compris. ":"Je n'ai rien entendu. ")+"Appuie sur le micro et dis : "+w);return}
+ micShow(false);await say("Bien essayé. Le mot était : "+w);if(s!==seq)return;S.i++;nextSay();
 }
 /* LETTRE : une lettre est montrée et dite, l'enfant appuie sur la bonne touche */
 const keyOf=l=>document.querySelector(`[data-l="${l}"]`);
@@ -349,10 +360,11 @@ async function letter(l){
   case "spell": if(S.busy||S.input.length>=(S.kind==="syll"?5:N))return;S.input+=l;disp();hush();await say(NAMES[l]);break;
   case "mystery": guess(l);break;
   case "letters": checkLetter(l);break;
-  case "sayit": S.i++;nextSay();break;
+  case "sayit": break;
  }
 }
 function ctl(c){
+ if(!["repeat","del","enter","help","case"].includes(c))document.getElementById("mic").hidden=true;
  log("bouton "+c+" (mode "+S.mode+")");
  if(c==="case"){lower=!lower;try{localStorage.setItem("dp-case",lower?"min":"maj")}catch(e){}applyCase();
   cells.forEach(x=>x.textContent=lower?x.textContent.toLowerCase():x.textContent.toUpperCase());beep(900,.03,.04);return}
@@ -382,6 +394,7 @@ function press(el){if(!el)return;el.classList.add("down");setTimeout(()=>el.clas
 document.addEventListener("pointerdown",e=>{const b=e.target.closest("button.k");if(b&&b.dataset.c!=="on"){e.preventDefault();press(b)}});
 /* MARCHE au "click" : iPad n'autorise la voix qu'après un vrai tap */
 onBtn.addEventListener("click",e=>press(e.currentTarget));
+document.getElementById("mic").addEventListener("click",()=>hear());
 document.addEventListener("keydown",e=>{if(e.repeat||e.metaKey||e.ctrlKey)return;let k=e.key;
  if(k==="Enter")k="enter";else if(k==="Backspace")k="del";else k=k.toUpperCase();
  const el=document.querySelector(`[data-l="${k}"],[data-c="${k}"]`);if(el){e.preventDefault();press(el)}});

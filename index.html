@@ -6,7 +6,7 @@
 <title>Ma Dictée Parlante</title>
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#c4261f">
-<meta name="app-version" content="1.8">
+<meta name="app-version" content="1.9">
 <meta name="mobile-web-app-capable" content="yes">
 <link rel="icon" href="icons/icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -75,6 +75,7 @@ box-shadow:0 5px 0 var(--keyd),0 7px 8px rgba(0,0,0,.35);transition:transform .0
 #dbglog{margin:0;white-space:pre-wrap;max-height:50vh;overflow:auto}
 .mic{display:flex;align-items:center;justify-content:center;gap:14px;width:100%;margin-top:10px;min-height:72px;border:0;border-radius:14px;background:#2fbf55;color:#fff;font:600 clamp(18px,2.6vw,24px) Fredoka,sans-serif;box-shadow:0 5px 0 #1b7d36;cursor:pointer}
 .mic b{font-size:1.5em}.mic[hidden]{display:none}
+.mic:disabled:not(.live){background:#7c8a80;box-shadow:0 5px 0 #4d5750}
 .mic.live{background:#e23b2e;box-shadow:0 0 0 6px rgba(226,59,46,.35),0 5px 0 #8e100b;animation:pulse 1s infinite}
 @keyframes pulse{50%{box-shadow:0 0 0 14px rgba(226,59,46,.15),0 5px 0 #8e100b}}
 .note{max-width:980px;font-size:14px;opacity:.75;text-align:center;margin:18px 8px 0}
@@ -131,13 +132,16 @@ $("keys").innerHTML=LETTERS.map(l=>`<button class="k${"ÉÈÊÀÇ".includes(l)?"
 
 /* ---- son ---- */
 let ac=null, voice=null;
-const pickVoice=()=>{const vs=speechSynthesis.getVoices();voice=vs.find(v=>/^fr[-_]FR/i.test(v.lang))||vs.find(v=>/^fr/i.test(v.lang))||null};
+const LOG=[];let logView=null;
+/* On choisit une voix française installée sur la tablette (plus rapide qu'une voix "en ligne") */
+const pickVoice=()=>{const vs=speechSynthesis.getVoices().filter(v=>/^fr/i.test(v.lang));
+ voice=vs.find(v=>v.localService&&/^fr[-_]FR/i.test(v.lang))||vs.find(v=>v.localService)||vs.find(v=>/^fr[-_]FR/i.test(v.lang))||vs[0]||null;
+ if(typeof log==="function")log("voix choisie : "+(voice?voice.name+(voice.localService?" (sur la tablette)":" (en ligne)"):"aucune")+" — "+vs.length+" voix fr")};
 if("speechSynthesis" in window){pickVoice();speechSynthesis.onvoiceschanged=pickVoice}
 function beep(f,d=.05,vol=.05,t0=0){if(!ac)return;const o=ac.createOscillator(),g=ac.createGain();o.type="square";o.frequency.value=f;
  const t=ac.currentTime+t0;g.gain.setValueAtTime(vol,t);g.gain.exponentialRampToValueAtTime(.0001,t+d);o.connect(g).connect(ac.destination);o.start(t);o.stop(t+d+.02)}
 function jingle(){[523,659,784,1047].forEach((f,i)=>beep(f,.12,.05,i*.11))}
 /* Journal de diagnostic : touche 5 fois le numéro de version sous le jeu pour l'afficher */
-const LOG=[];let logView=null;
 function log(m){const d=new Date();LOG.push(d.toTimeString().slice(0,8)+" "+m);if(LOG.length>60)LOG.shift();if(logView)logView.textContent=LOG.join("\n")}
 /* Voix pour Chrome Android :
    - jamais de nouvelle phrase moins de 0,4 s après une coupure,
@@ -152,7 +156,7 @@ let seq=0;
    Chaque phrase est surveillée : si elle n'a pas démarré au bout de 2,5 s, on remet la voix à zéro et on la redit. */
 function resetVoice(){try{SS.cancel()}catch(e){}try{SS.resume()}catch(e){}lastCut=Date.now()}
 function speakOnce(text,my){return new Promise(res=>{
- const u=new SpeechSynthesisUtterance(text);u.lang="fr-FR";if(voice&&voice.localService)u.voice=voice;u.rate=.82;u.pitch=.5;
+ const u=new SpeechSynthesisUtterance(text);u.lang="fr-FR";if(voice)u.voice=voice;u.rate=.82;u.pitch=.5;
  keep.add(u);let started=false,done=false;
  const fin=v=>{if(!done){done=true;keep.delete(u);res(v)}};
  u.onstart=()=>{started=true;log("voix > "+text)};
@@ -223,7 +227,7 @@ const onBtn=document.querySelector('[data-c="on"]');
 function powerOff(){if(S.mode==="off")return;hush();setPic("");S={mode:"off"};show("");vfd.classList.add("off");onBtn.classList.remove("lit");setInfo("Appuie sur MARCHE");beep(330,.15)}
 async function power(){
  if(S.mode!=="off")return;
- onBtn.classList.add("lit");
+ onBtn.classList.add("lit");pickVoice();
  try{ac=ac||new (window.AudioContext||window.webkitAudioContext)();ac.resume()}catch(e){}
  if(SS){SS.cancel();lastCut=Date.now();pickVoice()}
  const s=hush();vfd.classList.remove("off");jingle();show("BONJOUR");menu();
@@ -288,8 +292,9 @@ async function nextSay(){
   show("FIN");menu("Partie finie — choisis un jeu");await say("C'est fini. Bravo !");return}
  S.tries=0;S.listening=false;const w=S.words[S.i];show(w);
  if(micOff){setInfo(`Mot ${S.i+1}/10 — lis le mot à voix haute`,"ENTRÉE = suivant");await say("Dis-le : "+w);return}
+ setInfo(`Mot ${S.i+1}/10 — écoute…`,`Score ${S.score}`);micShow(true,"Écoute d'abord…");micBtn().disabled=true;
+ await say("Dis-le : "+w);if(s!==seq)return;
  setInfo(`Mot ${S.i+1}/10 — appuie sur le micro et dis le mot`,`Score ${S.score}`);micShow(true,"Appuie et parle");
- await say("Dis-le : "+w);
 }
 async function hear(){
  if(S.mode!=="sayit"||S.listening)return;
@@ -309,7 +314,8 @@ async function hear(){
   await say(["Correct !","Bien dit !","Très bien !"][Math.random()*3|0]);if(s!==seq)return;S.i++;return nextSay()}
  if(S.tries===0){S.tries=1;beep(196,.2,.05);show(w);
   setInfo(alts?`J'ai entendu « ${alts[0]} » — réessaie`:"Je n'ai rien entendu — réessaie",`Score ${S.score}`);
-  await say((alts?"Je n'ai pas bien compris. ":"Je n'ai rien entendu. ")+"Appuie sur le micro et dis : "+w);return}
+  micShow(true,"Écoute d'abord…");micBtn().disabled=true;
+  await say((alts?"Je n'ai pas bien compris. ":"Je n'ai rien entendu. ")+"Appuie sur le micro et dis : "+w);if(s===seq)micShow(true,"Appuie et parle");return}
  micShow(false);await say("Bien essayé. Le mot était : "+w);if(s!==seq)return;S.i++;nextSay();
 }
 /* LETTRE : une lettre est montrée et dite, l'enfant appuie sur la bonne touche */

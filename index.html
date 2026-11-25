@@ -6,7 +6,7 @@
 <title>Ma Dictée Parlante</title>
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#c4261f">
-<meta name="app-version" content="1.6">
+<meta name="app-version" content="1.7">
 <meta name="mobile-web-app-capable" content="yes">
 <link rel="icon" href="icons/icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -148,26 +148,30 @@ const SS=("speechSynthesis" in window)?speechSynthesis:null;
 const wait=ms=>new Promise(r=>setTimeout(r,ms));
 const keep=new Set();let lastCut=0;
 let seq=0;
+/* Après le micro, Chrome Android laisse souvent la voix bloquée (elle croit parler mais reste muette).
+   Chaque phrase est surveillée : si elle n'a pas démarré au bout de 2,5 s, on remet la voix à zéro et on la redit. */
+function resetVoice(){try{SS.cancel()}catch(e){}try{SS.resume()}catch(e){}lastCut=Date.now()}
 function speakOnce(text,my){return new Promise(res=>{
  const u=new SpeechSynthesisUtterance(text);u.lang="fr-FR";if(voice&&voice.localService)u.voice=voice;u.rate=.82;u.pitch=.5;
  keep.add(u);let started=false,done=false;
  const fin=v=>{if(!done){done=true;keep.delete(u);res(v)}};
  u.onstart=()=>{started=true;log("voix > "+text)};
- u.onend=()=>fin("ok");
+ u.onend=()=>fin(started?"ok":"retry");
  u.onerror=e=>{log("voix erreur ("+e.error+") : "+text);fin(my===seq&&!started?"retry":"ok")};
- try{if(SS.paused)SS.resume();SS.speak(u)}catch(e){log("voix exception "+e.message);fin("ok")}
- setTimeout(()=>{if(!started&&!done&&!SS.speaking&&!SS.pending&&my===seq){log("voix muette, relance : "+text);fin("retry")}},4000);
+ try{if(SS.paused)SS.resume();SS.speak(u)}catch(e){log("voix exception "+e.message);fin("retry")}
+ setTimeout(()=>{if(!started&&!done&&my===seq){log("voix bloquée (speaking="+SS.speaking+"), remise à zéro : "+text);fin("retry")}},2500);
  setTimeout(()=>fin("ok"),5000+text.length*130);
 })}
 async function say(text){
  const my=seq;
  if(!SS){await wait(400+text.length*55);return}
  const gap=Date.now()-lastCut;if(gap<400)await wait(400-gap);
- for(let k=0;k<2;k++){
+ for(let k=0;k<3;k++){
   if(my!==seq)return;
   const r=await speakOnce(text,my);
   if(r!=="retry")return;
-  await wait(400);
+  resetVoice();if(k===1)pickVoice();
+  await wait(500);
  }
 }
 function hush(){seq++;stopListen();if(S&&S.mode!=="sayit"){const m=document.getElementById("mic");if(m)m.hidden=true}if(SS&&(SS.speaking||SS.pending)){SS.cancel();lastCut=Date.now()}return seq}
@@ -185,8 +189,8 @@ function listen(){return new Promise(res=>{
  r.onstart=()=>log("micro ouvert");
  r.onresult=e=>{out=[...e.results[0]].map(a=>a.transcript);log("micro a entendu : "+out.join(" | "))};
  r.onerror=e=>{micErr=e.error;log("micro erreur : "+e.error);
-  if(e.error==="not-allowed"||e.error==="service-not-allowed"||e.error==="audio-capture"||e.error==="language-not-supported")micOff=true};
- r.onend=()=>{log("micro fermé");if(rec===r)rec=null;res(out)};
+  if(e.error==="not-allowed"||e.error==="service-not-allowed"||e.error==="language-not-supported")micOff=true};
+ r.onend=()=>{log("micro fermé");if(rec===r)rec=null;setTimeout(()=>res(out),500)};
  try{r.start()}catch(e){log("micro exception "+e.message);rec=null;micErr="exception";return res(null)}
  setTimeout(()=>{try{r.stop()}catch(e){}},7000);
 })}
@@ -290,9 +294,11 @@ async function hear(){
  const s=hush();S.listening=true;const w=S.words[S.i];
  const m=micBtn();m.classList.add("live");m.disabled=true;m.querySelector("span").textContent="J'écoute…";
  setInfo(`Mot ${S.i+1}/10 — parle maintenant !`,`Score ${S.score}`);
- const alts=await listen();if(s!==seq){S.listening=false;return}
+ resetVoice();await wait(600);if(s!==seq){S.listening=false;return}
+ beep(1046,.08,.04);await wait(200);
+ const alts=await listen();resetVoice();if(s!==seq){S.listening=false;return}
  S.listening=false;micShow(true,"Appuie et parle");
- if(alts===null&&micErr&&micErr!=="no-speech"&&micErr!=="aborted"){
+ if(alts===null&&micOff){
   const why={"not-allowed":"le micro est refusé","service-not-allowed":"la reconnaissance vocale est bloquée","network":"il faut internet","audio-capture":"le micro est occupé","language-not-supported":"le français n'est pas installé","indisponible":"pas de reconnaissance vocale","exception":"erreur au démarrage"}[micErr]||micErr;
   setInfo(`Micro : ${why}`,"ENTRÉE = suivant");
   await say("Le micro ne marche pas. Lis le mot, puis touche entrée.");return}
